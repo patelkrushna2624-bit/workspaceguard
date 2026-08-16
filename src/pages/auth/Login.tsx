@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "react-router-dom";
@@ -8,18 +9,24 @@ import {
   type LoginFormData,
 } from "../../schemas/authSchema";
 import { useAuth } from "../../hooks/useAuth";
+import { supabase } from "../../lib/supabase";
 
 export default function Login() {
   const navigate = useNavigate();
   const { signIn } = useAuth();
 
+  const [resetLoading, setResetLoading] = useState(false);
+
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
+
+  const email = watch("email");
 
   const onSubmit = async (data: LoginFormData) => {
     const { error } = await signIn(data.email, data.password);
@@ -31,7 +38,39 @@ export default function Login() {
 
     toast.success("Login successful!");
 
-    navigate("/settings/team");
+    navigate("/dashboard");
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("Enter your email address first.");
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo: `${window.location.origin}/reset-password`,
+        },
+      );
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success(
+        "Password reset email sent. Check your email.",
+      );
+    } catch (error) {
+      console.error("Password reset error:", error);
+      toast.error("Unable to send password reset email.");
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   return (
@@ -47,7 +86,11 @@ export default function Login() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-5"
+        >
+          {/* Email */}
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-200">
               Email
@@ -69,9 +112,22 @@ export default function Login() {
 
           {/* Password */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-200">
-              Password
-            </label>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="block text-sm font-medium text-slate-200">
+                Password
+              </label>
+
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+                className="text-sm font-medium text-blue-400 hover:text-blue-300 disabled:opacity-50"
+              >
+                {resetLoading
+                  ? "Sending..."
+                  : "Forgot password?"}
+              </button>
+            </div>
 
             <input
               type="password"
@@ -87,7 +143,7 @@ export default function Login() {
             )}
           </div>
 
-          
+          {/* Login */}
           <button
             type="submit"
             disabled={isSubmitting}

@@ -5,6 +5,8 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 
 import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
+import AcceptInvite from "../pages/auth/AcceptInvite";
+
 import MemberDashboard from "../pages/member/MemberDashboard";
 import TeamManagement from "../pages/owner/TeamManagement";
 import AuditLog from "../pages/AuditLog";
@@ -12,16 +14,34 @@ import AuditLog from "../pages/AuditLog";
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Public */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      {/* Public routes */}
+      <Route
+        path="/login"
+        element={<Login />}
+      />
 
-      {/* Protected */}
+      <Route
+        path="/register"
+        element={<Register />}
+      />
+
+      {/* Invitation callback */}
+      <Route
+        path="/accept-invite"
+        element={<AcceptInvite />}
+      />
+
+      {/* Protected routes */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route
             path="/"
-            element={<Navigate to="/dashboard" replace />}
+            element={
+              <Navigate
+                to="/dashboard"
+                replace
+              />
+            }
           />
 
           <Route
@@ -41,10 +61,15 @@ export default function AppRoutes() {
         </Route>
       </Route>
 
-      {/* Anything unknown */}
+      {/* Unknown route */}
       <Route
         path="*"
-        element={<Navigate to="/login" replace />}
+        element={
+          <Navigate
+            to="/login"
+            replace
+          />
+        }
       />
     </Routes>
   );
