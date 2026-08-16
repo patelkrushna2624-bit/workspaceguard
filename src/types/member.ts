@@ -1,0 +1,1 @@
+export type SecurityRole = "admin" | "editor" | "viewer";
