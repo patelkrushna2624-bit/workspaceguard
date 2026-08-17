@@ -40,6 +40,11 @@ export function useMembers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  /*
+   * ---------------------------------------------------------
+   * Fetch members
+   * ---------------------------------------------------------
+   */
   const fetchMembers = useCallback(async () => {
     if (!workspace?.id) {
       setMembers([]);
@@ -90,7 +95,6 @@ export function useMembers() {
           user_id: member.user_id,
           workspace_id: member.workspace_id,
 
-          // IMPORTANT: read role directly from workspace_members
           role: (member.role || "viewer") as SecurityRole,
 
           can_edit: Boolean(member.can_edit),
@@ -123,11 +127,86 @@ export function useMembers() {
     }
   }, [workspace?.id]);
 
+  /*
+   * ---------------------------------------------------------
+   * Audit log helper
+   * ---------------------------------------------------------
+   */
+  const createAuditLog = async ({
+    action,
+    entityId,
+    details,
+  }: {
+    action: string;
+    entityId: string;
+    details: Record<string, unknown>;
+  }) => {
+    if (!workspace?.id) {
+      return;
+    }
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        console.error(
+          "AUDIT LOG ERROR: No authenticated user found.",
+        );
+        return;
+      }
+
+      const { error: auditError } = await supabase
+        .from("audit_logs")
+        .insert({
+          workspace_id: workspace.id,
+          user_id: user.id,
+          action,
+          entity_type: "workspace_member",
+          entity_id: entityId,
+          details,
+        });
+
+      if (auditError) {
+        console.error(
+          "AUDIT LOG INSERT ERROR:",
+          auditError,
+        );
+      } else {
+        console.log(
+          "AUDIT LOG CREATED:",
+          action,
+        );
+      }
+    } catch (err) {
+      console.error(
+        "UNEXPECTED AUDIT LOG ERROR:",
+        err,
+      );
+    }
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * Change role
+   * ---------------------------------------------------------
+   */
   const updateMemberRole = async (
     memberId: string,
     role: SecurityRole,
   ) => {
     setError(null);
+
+    /*
+     * Find the member before changing the role
+     * so we can record the old and new role.
+     */
+    const member = members.find(
+      (item) => item.id === memberId,
+    );
+
+    const oldRole = member?.role ?? null;
 
     const { error: updateError } = await supabase
       .from("workspace_members")
@@ -147,6 +226,20 @@ export function useMembers() {
       };
     }
 
+    /*
+     * Create audit record.
+     */
+    await createAuditLog({
+      action: "role_updated",
+      entityId: memberId,
+      details: {
+        member_email: member?.profile?.email ?? null,
+        member_name: member?.profile?.full_name ?? null,
+        old_role: oldRole,
+        new_role: role,
+      },
+    });
+
     await fetchMembers();
 
     return {
@@ -154,11 +247,23 @@ export function useMembers() {
     };
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Change permissions
+   * ---------------------------------------------------------
+   */
   const updateMemberPermissions = async (
     memberId: string,
     permissions: PermissionUpdate,
   ) => {
     setError(null);
+
+    /*
+     * Find member so audit log contains useful information.
+     */
+    const member = members.find(
+      (item) => item.id === memberId,
+    );
 
     const { error: updateError } = await supabase
       .from("workspace_members")
@@ -178,6 +283,19 @@ export function useMembers() {
       };
     }
 
+    /*
+     * Create audit record.
+     */
+    await createAuditLog({
+      action: "permissions_updated",
+      entityId: memberId,
+      details: {
+        member_email: member?.profile?.email ?? null,
+        member_name: member?.profile?.full_name ?? null,
+        changed_permissions: permissions,
+      },
+    });
+
     await fetchMembers();
 
     return {
@@ -185,10 +303,22 @@ export function useMembers() {
     };
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Remove member
+   * ---------------------------------------------------------
+   */
   const removeMember = async (
     memberId: string,
   ) => {
     setError(null);
+
+    /*
+     * Get member information BEFORE deleting it.
+     */
+    const member = members.find(
+      (item) => item.id === memberId,
+    );
 
     const { error: deleteError } = await supabase
       .from("workspace_members")
@@ -208,6 +338,19 @@ export function useMembers() {
       };
     }
 
+    /*
+     * Create audit record AFTER successful deletion.
+     */
+    await createAuditLog({
+      action: "member_removed",
+      entityId: memberId,
+      details: {
+        member_email: member?.profile?.email ?? null,
+        member_name: member?.profile?.full_name ?? null,
+        role: member?.role ?? null,
+      },
+    });
+
     await fetchMembers();
 
     return {
@@ -215,6 +358,11 @@ export function useMembers() {
     };
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Initial load
+   * ---------------------------------------------------------
+   */
   useEffect(() => {
     void fetchMembers();
   }, [fetchMembers]);
