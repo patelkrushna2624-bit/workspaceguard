@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useWorkspaceContext } from "../context/WorkspaceContext";
@@ -35,20 +36,9 @@ export type PermissionUpdate = {
 export function useMembers() {
   const { workspace } = useWorkspaceContext();
 
-  const [members, setMembers] =
-    useState<WorkspaceMember[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState<string | null>(null);
-
-  /*
-   * ---------------------------------------------------------
-   * Fetch members
-   * ---------------------------------------------------------
-   */
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchMembers = useCallback(async () => {
     if (!workspace?.id) {
@@ -61,57 +51,51 @@ export function useMembers() {
     setError(null);
 
     try {
-      const { data, error: membersError } =
-        await supabase
-          .from("workspace_members")
-          .select(`
+      const { data, error: membersError } = await supabase
+        .from("workspace_members")
+        .select(`
+          id,
+          user_id,
+          workspace_id,
+          role,
+          can_edit,
+          can_delete,
+          can_invite,
+          created_at,
+          profiles!workspace_members_user_id_fkey (
             id,
-            user_id,
-            workspace_id,
-            role,
-            can_edit,
-            can_delete,
-            can_invite,
-            created_at,
-            profiles!workspace_members_user_id_fkey (
-              id,
-              email,
-              full_name
-            )
-          `)
-          .eq("workspace_id", workspace.id)
-          .order("created_at", {
-            ascending: true,
-          });
+            email,
+            full_name
+          )
+        `)
+        .eq("workspace_id", workspace.id)
+        .order("created_at", {
+          ascending: true,
+        });
 
-      // TEMPORARY DEBUG LOGS
       console.log("MEMBERS DATA:", data);
       console.log("MEMBERS ERROR:", membersError);
       console.log("CURRENT WORKSPACE ID:", workspace.id);
 
       if (membersError) {
-        console.error(
-          "MEMBERS ERROR:",
-          membersError,
-        );
-
+        console.error("MEMBERS ERROR:", membersError);
         setError(membersError.message);
         setMembers([]);
-
         return;
       }
 
-      const formattedMembers: WorkspaceMember[] =
-        (data ?? []).map((member: any) => ({
+      const formattedMembers: WorkspaceMember[] = (data ?? []).map(
+        (member: any) => ({
           id: member.id,
           user_id: member.user_id,
           workspace_id: member.workspace_id,
 
-          role: member.role as SecurityRole,
+          // IMPORTANT: read role directly from workspace_members
+          role: (member.role || "viewer") as SecurityRole,
 
-          can_edit: member.can_edit,
-          can_delete: member.can_delete,
-          can_invite: member.can_invite,
+          can_edit: Boolean(member.can_edit),
+          can_delete: Boolean(member.can_delete),
+          can_invite: Boolean(member.can_invite),
 
           created_at: member.created_at,
 
@@ -119,23 +103,17 @@ export function useMembers() {
             ? {
                 id: member.profiles.id,
                 email: member.profiles.email,
-                full_name:
-                  member.profiles.full_name,
+                full_name: member.profiles.full_name,
               }
             : null,
-        }));
-
-      console.log(
-        "FORMATTED MEMBERS:",
-        formattedMembers,
+        }),
       );
+
+      console.log("FORMATTED MEMBERS:", formattedMembers);
 
       setMembers(formattedMembers);
     } catch (err) {
-      console.error(
-        "Unexpected members error:",
-        err,
-      );
+      console.error("Unexpected members error:", err);
 
       setError(
         "Something went wrong while loading members.",
@@ -145,23 +123,16 @@ export function useMembers() {
     }
   }, [workspace?.id]);
 
-  /*
-   * ---------------------------------------------------------
-   * Update member role
-   * ---------------------------------------------------------
-   */
-
   const updateMemberRole = async (
     memberId: string,
     role: SecurityRole,
   ) => {
     setError(null);
 
-    const { error: updateError } =
-      await supabase
-        .from("workspace_members")
-        .update({ role })
-        .eq("id", memberId);
+    const { error: updateError } = await supabase
+      .from("workspace_members")
+      .update({ role })
+      .eq("id", memberId);
 
     if (updateError) {
       console.error(
@@ -183,23 +154,16 @@ export function useMembers() {
     };
   };
 
-  /*
-   * ---------------------------------------------------------
-   * Update permissions
-   * ---------------------------------------------------------
-   */
-
   const updateMemberPermissions = async (
     memberId: string,
     permissions: PermissionUpdate,
   ) => {
     setError(null);
 
-    const { error: updateError } =
-      await supabase
-        .from("workspace_members")
-        .update(permissions)
-        .eq("id", memberId);
+    const { error: updateError } = await supabase
+      .from("workspace_members")
+      .update(permissions)
+      .eq("id", memberId);
 
     if (updateError) {
       console.error(
@@ -221,22 +185,15 @@ export function useMembers() {
     };
   };
 
-  /*
-   * ---------------------------------------------------------
-   * Remove member
-   * ---------------------------------------------------------
-   */
-
   const removeMember = async (
     memberId: string,
   ) => {
     setError(null);
 
-    const { error: deleteError } =
-      await supabase
-        .from("workspace_members")
-        .delete()
-        .eq("id", memberId);
+    const { error: deleteError } = await supabase
+      .from("workspace_members")
+      .delete()
+      .eq("id", memberId);
 
     if (deleteError) {
       console.error(
@@ -258,21 +215,9 @@ export function useMembers() {
     };
   };
 
-  /*
-   * ---------------------------------------------------------
-   * Initial fetch
-   * ---------------------------------------------------------
-   */
-
   useEffect(() => {
-    fetchMembers();
+    void fetchMembers();
   }, [fetchMembers]);
-
-  /*
-   * ---------------------------------------------------------
-   * Public API
-   * ---------------------------------------------------------
-   */
 
   return {
     members,
