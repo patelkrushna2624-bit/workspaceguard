@@ -22,7 +22,7 @@ function jsonResponse(
 
 Deno.serve(async (req) => {
   // ---------------------------------------------------------
-  // CORS
+  // 1. CORS
   // ---------------------------------------------------------
 
   if (req.method === "OPTIONS") {
@@ -33,13 +33,13 @@ Deno.serve(async (req) => {
   }
 
   // ---------------------------------------------------------
-  // Only POST requests are allowed
+  // 2. Only POST requests
   // ---------------------------------------------------------
 
   if (req.method !== "POST") {
     return jsonResponse(
       {
-        error: "Method not allowed",
+        error: "Method not allowed.",
       },
       405,
     );
@@ -47,17 +47,14 @@ Deno.serve(async (req) => {
 
   try {
     // ---------------------------------------------------------
-    // 1. Environment variables
+    // 3. Environment variables
     // ---------------------------------------------------------
 
-    const supabaseUrl =
-      Deno.env.get("SUPABASE_URL");
-
-    const supabaseAnonKey =
-      Deno.env.get("SUPABASE_ANON_KEY");
-
-    const serviceRoleKey =
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceRoleKey = Deno.env.get(
+      "SUPABASE_SERVICE_ROLE_KEY",
+    );
 
     if (
       !supabaseUrl ||
@@ -65,20 +62,19 @@ Deno.serve(async (req) => {
       !serviceRoleKey
     ) {
       console.error(
-        "Missing Supabase environment variables",
+        "Missing Supabase environment variables.",
       );
 
       return jsonResponse(
         {
-          error:
-            "Server configuration error.",
+          error: "Server configuration error.",
         },
         500,
       );
     }
 
     // ---------------------------------------------------------
-    // 2. Get Authorization header
+    // 4. Get Authorization header
     // ---------------------------------------------------------
 
     const authHeader =
@@ -95,7 +91,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 3. Create client using current user's JWT
+    // 5. Create client using current user's JWT
     // ---------------------------------------------------------
 
     const supabaseUser = createClient(
@@ -111,7 +107,7 @@ Deno.serve(async (req) => {
     );
 
     // ---------------------------------------------------------
-    // 4. Verify current logged-in user
+    // 6. Verify current logged-in user
     // ---------------------------------------------------------
 
     const {
@@ -134,7 +130,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 5. Read request body
+    // 7. Read request body
     // ---------------------------------------------------------
 
     const body = await req.json();
@@ -150,7 +146,7 @@ Deno.serve(async (req) => {
         : "";
 
     // ---------------------------------------------------------
-    // 6. Validate email
+    // 8. Validate email
     // ---------------------------------------------------------
 
     if (!email) {
@@ -176,7 +172,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 7. Validate workspace
+    // 9. Validate workspace ID
     // ---------------------------------------------------------
 
     if (!workspaceId) {
@@ -190,7 +186,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 8. Create service-role admin client
+    // 10. Create service-role admin client
     // ---------------------------------------------------------
 
     const supabaseAdmin = createClient(
@@ -199,7 +195,7 @@ Deno.serve(async (req) => {
     );
 
     // ---------------------------------------------------------
-    // 9. Verify workspace ownership
+    // 11. Verify workspace ownership
     // ---------------------------------------------------------
 
     const {
@@ -240,7 +236,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 10. Prevent inviting yourself
+    // 12. Prevent inviting yourself
     // ---------------------------------------------------------
 
     if (
@@ -257,7 +253,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 11. Check if user already exists
+    // 13. Check if user already exists
     // ---------------------------------------------------------
 
     const {
@@ -294,25 +290,18 @@ Deno.serve(async (req) => {
       return jsonResponse(
         {
           error:
-            "A user with this email address already exists.",
+            "A user with this email address already exists. Delete the old test user from Supabase Authentication > Users before sending another test invitation.",
         },
         400,
       );
     }
 
     // ---------------------------------------------------------
-    // 12. Send invitation
+    // 14. Invitation redirect
     // ---------------------------------------------------------
 
-    // IMPORTANT:
-    // This is your deployed React application's URL.
-    const appUrl =
-      "https://workspaceguard.vercel.app";
-
-    // The invited user will be sent here after
-    // accepting the Supabase invitation.
     const redirectTo =
-      `${appUrl}/accept-invite`;
+      "https://workspaceguard.vercel.app/accept-invite";
 
     console.log(
       "Sending invitation to:",
@@ -323,6 +312,10 @@ Deno.serve(async (req) => {
       "Invitation redirect:",
       redirectTo,
     );
+
+    // ---------------------------------------------------------
+    // 15. Send Supabase invitation
+    // ---------------------------------------------------------
 
     const {
       data: inviteData,
@@ -363,7 +356,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 13. Create / update profile
+    // 16. Create / update profile
     // ---------------------------------------------------------
 
     const {
@@ -388,7 +381,6 @@ Deno.serve(async (req) => {
         profileError,
       );
 
-      // Clean up auth user if profile creation fails.
       await supabaseAdmin.auth.admin.deleteUser(
         invitedUser.id,
       );
@@ -403,7 +395,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 14. Check workspace membership
+    // 17. Check workspace membership
     // ---------------------------------------------------------
 
     const {
@@ -452,7 +444,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 15. Create workspace membership
+    // 18. Create workspace membership
     // ---------------------------------------------------------
 
     const {
@@ -477,7 +469,6 @@ Deno.serve(async (req) => {
         memberError,
       );
 
-      // Clean up auth user if membership creation fails.
       await supabaseAdmin.auth.admin.deleteUser(
         invitedUser.id,
       );
@@ -492,7 +483,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // 16. Success
+    // 19. Success
     // ---------------------------------------------------------
 
     console.log(
