@@ -1,4 +1,3 @@
-
 import type { WorkspaceMember } from "../../hooks/useMembers";
 
 import RoleSelector from "./RoleSelector";
@@ -6,7 +5,6 @@ import PermissionSwitches from "./PermissionSwitches";
 
 type MemberCardProps = {
   member: WorkspaceMember;
-
   canManage: boolean;
 
   onRoleChange: (
@@ -24,12 +22,6 @@ type MemberCardProps = {
   onRemove: () => void;
 };
 
-/*
- * ---------------------------------------------------------
- * Compound components
- * ---------------------------------------------------------
- */
-
 function Header({
   member,
 }: {
@@ -38,13 +30,19 @@ function Header({
   return (
     <div>
       <h3 className="font-semibold text-white">
-        {member.profile?.full_name ||
-          "Unknown User"}
+        {member.profile?.full_name || "Unknown User"}
       </h3>
 
       <p className="mt-1 text-sm text-slate-400">
-        {member.profile?.email ||
-          "No email"}
+        {member.profile?.email || "No email"}
+      </p>
+
+      {/* Explicit role display */}
+      <p className="mt-2 text-sm text-slate-300">
+        Role:{" "}
+        <span className="font-semibold capitalize text-blue-400">
+          {member.role || "viewer"}
+        </span>
       </p>
     </div>
   );
@@ -57,6 +55,7 @@ function Roles({
 }: {
   member: WorkspaceMember;
   canManage: boolean;
+
   onRoleChange: (
     role: WorkspaceMember["role"],
   ) => void;
@@ -68,7 +67,7 @@ function Roles({
       </p>
 
       <RoleSelector
-        role={member.role}
+        role={member.role || "viewer"}
         disabled={!canManage}
         onChange={onRoleChange}
       />
@@ -131,12 +130,6 @@ function Actions({
   );
 }
 
-/*
- * ---------------------------------------------------------
- * Main MemberCard
- * ---------------------------------------------------------
- */
-
 function MemberCard({
   member,
   canManage,
@@ -147,6 +140,7 @@ function MemberCard({
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div className="flex flex-col gap-5">
+
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
           <Header member={member} />
 
@@ -157,6 +151,7 @@ function MemberCard({
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
+
           <Roles
             member={member}
             canManage={canManage}
@@ -166,19 +161,14 @@ function MemberCard({
           <Permissions
             member={member}
             canManage={canManage}
-            onPermissionChange={
-              onPermissionChange
-            }
+            onPermissionChange={onPermissionChange}
           />
+
         </div>
       </div>
     </div>
   );
 }
-
-/*
- * Attach compound components.
- */
 
 MemberCard.Header = Header;
 MemberCard.Roles = Roles;
