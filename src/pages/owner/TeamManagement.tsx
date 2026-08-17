@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useWorkspaceContext } from "../../context/WorkspaceContext";
 import { useAuth } from "../../hooks/useAuth";
@@ -32,27 +32,74 @@ export default function TeamManagement() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
 
+  // Search
+  const [searchQuery, setSearchQuery] = useState("");
+
   /*
-   * Only workspace owners can currently manage
-   * team members.
+   * Only workspace owners can manage team members.
    */
   const canManage = role === "owner";
 
   /*
    * ---------------------------------------------------------
-   * Invite member
+   * SEARCH MEMBERS
+   * ---------------------------------------------------------
+   *
+   * Searches by:
+   * - Member name
+   * - Member email
+   * - Member role
+   */
+  const filteredMembers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      return members;
+    }
+
+    return members.filter((member) => {
+      const name =
+        member.profile?.full_name?.toLowerCase() ?? "";
+
+      /*
+       * We use JSON.stringify here so this also works even if
+       * your WorkspaceMember profile type does not currently
+       * expose "email" in TypeScript.
+       */
+      const profileText = JSON.stringify(
+        member.profile ?? {},
+      ).toLowerCase();
+
+      const memberRole =
+        member.role?.toLowerCase() ?? "";
+
+      return (
+        name.includes(query) ||
+        profileText.includes(query) ||
+        memberRole.includes(query)
+      );
+    });
+  }, [members, searchQuery]);
+
+  /*
+   * ---------------------------------------------------------
+   * INVITE MEMBER
    * ---------------------------------------------------------
    */
   const handleInvite = async () => {
     const email = inviteEmail.trim();
 
     if (!email) {
-      setInviteMessage("Please enter an email address.");
+      setInviteMessage(
+        "Please enter an email address.",
+      );
       return;
     }
 
     if (!workspace?.id) {
-      setInviteMessage("Workspace not found.");
+      setInviteMessage(
+        "Workspace not found.",
+      );
       return;
     }
 
@@ -67,39 +114,37 @@ export default function TeamManagement() {
     setInviteMessage("");
 
     try {
-      const { data, error } = await supabase.functions.invoke(
-        "invite-member",
-        {
-          body: {
-            email,
-            workspaceId: workspace.id,
+      const { data, error } =
+        await supabase.functions.invoke(
+          "invite-member",
+          {
+            body: {
+              email,
+              workspaceId: workspace.id,
+            },
           },
-        },
-      );
+        );
 
-      /*
-       * IMPORTANT:
-       * Supabase functions.invoke() puts the HTTP response
-       * inside error.context when the Edge Function returns
-       * a non-2xx status.
-       *
-       * We read that response here so we can see the REAL
-       * error returned by the Edge Function.
-       */
       if (error) {
-        console.error("INVITE ERROR:", error);
+        console.error(
+          "INVITE ERROR:",
+          error,
+        );
 
         let errorMessage = error.message;
 
         try {
           if (error.context) {
-            const response = error.context as Response;
+            const response =
+              error.context as Response;
 
             if (
               response &&
-              typeof response.clone === "function"
+              typeof response.clone ===
+                "function"
             ) {
-              const clonedResponse = response.clone();
+              const clonedResponse =
+                response.clone();
 
               const responseText =
                 await clonedResponse.text();
@@ -111,12 +156,14 @@ export default function TeamManagement() {
 
               if (responseText) {
                 try {
-                  const parsed = JSON.parse(
-                    responseText,
-                  );
+                  const parsed =
+                    JSON.parse(
+                      responseText,
+                    );
 
                   if (parsed?.error) {
-                    errorMessage = parsed.error;
+                    errorMessage =
+                      parsed.error;
                   } else {
                     errorMessage =
                       `${error.message} - ${responseText}`;
@@ -142,10 +189,6 @@ export default function TeamManagement() {
         return;
       }
 
-      /*
-       * Edge Function can also return HTTP 200 with
-       * { error: "..." }.
-       */
       if (data?.error) {
         console.error(
           "FUNCTION RETURNED ERROR:",
@@ -159,22 +202,11 @@ export default function TeamManagement() {
         return;
       }
 
-      /*
-       * Success
-       */
       setInviteMessage(
         "Invitation sent successfully!",
       );
 
       setInviteEmail("");
-
-      /*
-       * Refresh member list after successful invitation.
-       *
-       * The invited user may not appear immediately depending
-       * on when the profile/member records become available,
-       * but refreshing here is still useful.
-       */
     } catch (err) {
       console.error(
         "UNEXPECTED INVITE ERROR:",
@@ -197,7 +229,7 @@ export default function TeamManagement() {
 
   /*
    * ---------------------------------------------------------
-   * Change role
+   * CHANGE ROLE
    * ---------------------------------------------------------
    */
   const handleRoleChange = async (
@@ -214,7 +246,8 @@ export default function TeamManagement() {
 
     const confirmed = window.confirm(
       `Change ${
-        member.profile?.full_name ?? "this member"
+        member.profile?.full_name ??
+        "this member"
       }'s role to ${newRole}?`,
     );
 
@@ -222,10 +255,11 @@ export default function TeamManagement() {
       return;
     }
 
-    const { error } = await updateMemberRole(
-      member.id,
-      newRole,
-    );
+    const { error } =
+      await updateMemberRole(
+        member.id,
+        newRole,
+      );
 
     if (error) {
       setInviteMessage(
@@ -241,7 +275,7 @@ export default function TeamManagement() {
 
   /*
    * ---------------------------------------------------------
-   * Change permission
+   * CHANGE PERMISSION
    * ---------------------------------------------------------
    */
   const handlePermissionChange = async (
@@ -278,7 +312,7 @@ export default function TeamManagement() {
 
   /*
    * ---------------------------------------------------------
-   * Remove member
+   * REMOVE MEMBER
    * ---------------------------------------------------------
    */
   const handleRemove = async (
@@ -290,7 +324,8 @@ export default function TeamManagement() {
 
     const confirmed = window.confirm(
       `Remove ${
-        member.profile?.full_name ?? "this member"
+        member.profile?.full_name ??
+        "this member"
       } from the workspace?`,
     );
 
@@ -298,9 +333,8 @@ export default function TeamManagement() {
       return;
     }
 
-    const { error } = await removeMember(
-      member.id,
-    );
+    const { error } =
+      await removeMember(member.id);
 
     if (error) {
       setInviteMessage(
@@ -316,7 +350,7 @@ export default function TeamManagement() {
 
   /*
    * ---------------------------------------------------------
-   * Loading
+   * LOADING
    * ---------------------------------------------------------
    */
   if (workspaceLoading) {
@@ -329,7 +363,7 @@ export default function TeamManagement() {
 
   /*
    * ---------------------------------------------------------
-   * Render
+   * RENDER
    * ---------------------------------------------------------
    */
   return (
@@ -361,7 +395,8 @@ export default function TeamManagement() {
             </p>
 
             <h2 className="mt-2 text-xl font-semibold">
-              {workspace?.name ?? "No workspace"}
+              {workspace?.name ??
+                "No workspace"}
             </h2>
           </div>
 
@@ -448,7 +483,58 @@ export default function TeamManagement() {
             </div>
           )}
 
-          {/* Permission message for non-owners */}
+          {/* Search */}
+          <div className="mb-6">
+            <label
+              htmlFor="member-search"
+              className="mb-2 block text-sm font-medium text-slate-300"
+            >
+              Search team members
+            </label>
+
+            <div className="relative">
+              <input
+                id="member-search"
+                type="text"
+                value={searchQuery}
+                onChange={(event) =>
+                  setSearchQuery(
+                    event.target.value,
+                  )
+                }
+                placeholder="Search by name, email, or role..."
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 pr-20 text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+              />
+
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSearchQuery("")
+                  }
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-sm text-slate-400 hover:bg-slate-700 hover:text-white"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {searchQuery && (
+              <p className="mt-2 text-sm text-slate-400">
+                Showing{" "}
+                <span className="font-medium text-white">
+                  {filteredMembers.length}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-white">
+                  {members.length}
+                </span>{" "}
+                members
+              </p>
+            )}
+          </div>
+
+          {/* Permission message */}
           {!canManage && (
             <div className="mb-6 rounded-lg border border-yellow-900 bg-yellow-950/30 p-4 text-sm text-yellow-300">
               You are a member of this workspace and do not
@@ -463,9 +549,24 @@ export default function TeamManagement() {
             </div>
           )}
 
+          {/* No search results */}
+          {!membersLoading &&
+            members.length > 0 &&
+            filteredMembers.length === 0 && (
+              <div className="mb-4 rounded-xl border border-dashed border-slate-700 bg-slate-900/50 px-6 py-10 text-center">
+                <h3 className="text-lg font-semibold text-white">
+                  No members found
+                </h3>
+
+                <p className="mt-2 text-sm text-slate-400">
+                  Try a different name, email, or role.
+                </p>
+              </div>
+            )}
+
           {/* Members */}
           <MemberList
-            members={members}
+            members={filteredMembers}
             loading={membersLoading}
             canManage={canManage}
             onRoleChange={handleRoleChange}
