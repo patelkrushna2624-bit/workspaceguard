@@ -1,103 +1,107 @@
+
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "../../lib/supabase";
 
 export default function AcceptInvite() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(false);
 
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
-    async function acceptInvitation() {
+    let mounted = true;
+
+    async function setupInvitation() {
       try {
         /*
-         * Supabase invitation links contain token_hash.
-         */
-        const tokenHash =
-          searchParams.get("token_hash");
-
-        /*
-         * Some Supabase flows may already establish
-         * a session before this page loads.
+         * Supabase may establish the session automatically
+         * when the invitation link is opened.
          */
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
         if (session?.user) {
-          setReady(true);
+          if (mounted) {
+            setReady(true);
+            setLoading(false);
+          }
           return;
         }
 
         /*
-         * If there is an invitation token, verify it.
+         * Listen for the authentication event generated
+         * by the invitation/recovery link.
          */
-        if (tokenHash) {
-          const { error } =
-            await supabase.auth.verifyOtp({
-              token_hash: tokenHash,
-              type: "invite",
-            });
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange(
+          (event, newSession) => {
+            console.log("AUTH EVENT:", event);
 
-          if (error) {
-            console.error(
-              "Invitation verification error:",
-              error,
-            );
+            if (
+              newSession?.user &&
+              (event === "SIGNED_IN" ||
+                event === "INITIAL_SESSION" ||
+                event === "PASSWORD_RECOVERY")
+            ) {
+              if (mounted) {
+                setReady(true);
+                setLoading(false);
+              }
+            }
+          },
+        );
 
-            toast.error(
-              "This invitation is invalid or has expired.",
-            );
+        /*
+         * Give Supabase a moment to process the
+         * invitation URL.
+         */
+        setTimeout(async () => {
+          const {
+            data: { session: currentSession },
+          } = await supabase.auth.getSession();
 
-            navigate("/login", {
-              replace: true,
-            });
-
-            return;
+          if (currentSession?.user) {
+            if (mounted) {
+              setReady(true);
+              setLoading(false);
+            }
+          } else {
+            if (mounted) {
+              setLoading(false);
+              toast.error(
+                "This invitation is invalid or has expired.",
+              );
+            }
           }
 
-          setReady(true);
-          return;
-        }
-
-        /*
-         * No token and no session.
-         */
-        toast.error(
-          "No valid invitation was found.",
-        );
-
-        navigate("/login", {
-          replace: true,
-        });
+          subscription.unsubscribe();
+        }, 1500);
       } catch (error) {
-        console.error(
-          "Invitation error:",
-          error,
-        );
+        console.error("Invitation error:", error);
 
-        toast.error(
-          "Unable to process the invitation.",
-        );
-
-        navigate("/login", {
-          replace: true,
-        });
-      } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          toast.error(
+            "Unable to process the invitation.",
+          );
+        }
       }
     }
 
-    acceptInvitation();
-  }, [navigate, searchParams]);
+    setupInvitation();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSetPassword = async (
     event: React.FormEvent<HTMLFormElement>,
@@ -119,12 +123,16 @@ export default function AcceptInvite() {
     setSaving(true);
 
     try {
-      const { error } =
-        await supabase.auth.updateUser({
-          password,
-        });
+      const { error } = await supabase.auth.updateUser({
+        password,
+      });
 
       if (error) {
+        console.error(
+          "PASSWORD UPDATE ERROR:",
+          error,
+        );
+
         toast.error(error.message);
         return;
       }
@@ -161,7 +169,27 @@ export default function AcceptInvite() {
   }
 
   if (!ready) {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+        <div className="rounded-xl bg-slate-900 p-8 text-center">
+          <h1 className="text-xl font-bold text-white">
+            Invitation could not be opened
+          </h1>
+
+          <p className="mt-2 text-sm text-slate-400">
+            Please request a new invitation.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="mt-5 rounded-lg bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
